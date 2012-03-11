@@ -1,0 +1,78 @@
+#using glob syntax.
+syntax: glob
+
+#archives
+*.rar
+*.zip
+
+#binaries
+*.eml
+*.exe
+*.dll
+
+#ignore files for Visual Studio
+*.pdb
+*.pch
+*.ncb
+*.obj
+*.bsc
+*.ilk
+*.il
+*.tli
+*.tlh
+*.idb
+*.sbr
+*.suo
+*.vshost.exe
+*.vshost.sln
+*.vshost.exe.manifest
+*.csproj.user
+*.csproj.FileListAbsolute.txt
+*.vbproj.user
+obj
+Debug
+Release
+
+#Visual Studio - test results
+*.trx
+TestResults
+
+#Visual Studio 2010 - upgrade files
+UpgradeLog.XML
+_UpgradeReport_Files
+*- Backup.rdlc
+
+#SSMS
+*.sqlsuo
+
+#python:
+*.pyc
+
+#Windows Explorer:
+Thumbs.db
+
+#Mercurial Hg working files
+*.rej
+
+#general temp files:
+*.bak
+old
+*.old
+temp
+*.temp
+*.orig
+temp.deploy.me
+temp.*
+
+#logs
+hgweb.access.log
+hgweb.error.log
+
+#large files
+*.ade
+*.adp
+*.cab
+
+#other - added from Tortoise Commit UI
+originalSqlObjects.sql
+newSQLresults.txt
