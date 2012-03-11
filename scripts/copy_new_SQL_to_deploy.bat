@@ -11,7 +11,7 @@ SET DEST_DIR=%TEMP%\temp.deploy.me
 IF NOT EXIST %DEST_DIR% (MKDIR %DEST_DIR%)
 
 REM TODO make the Py script look in current dir, if not an absolute path
-SET SCRIPT_DIR=C:\shared\hg_OdinCommon\deploysql\scripts
+SET SCRIPT_DIR=..\scripts
 SET CSV_FILENAME=%SCRIPT_DIR%\example_list_of_SQL_scripts_to_deploy.csv
 
 SET DEST_DIR_PARENT=%DEST_DIR%
@@ -47,7 +47,7 @@ IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 echo ____________________________________________________________________________________
 echo Copying SQL scripts ...
 
-pushd %PATH_TO_COMREG%\LING\sql\scripts
+pushd %SCRIPT_DIR%
 IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 CopySQLtoDeploy.py %CSV_FILENAME%          %SCRIPT_SRC_SQL%\     %DEST_DIR_DATABASE_SCRIPTS%\
 IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
