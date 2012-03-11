@@ -1,6 +1,5 @@
-DeploySQL 
-=========
+* DeploySQL *
 
 please see the Wiki:
 
-[[https://bitbucket.org/str/deploysql/wiki/Home|DeploySQL Wiki]]
+[DeploySQL Wiki](https://bitbucket.org/str/deploysql/wiki/Home)
