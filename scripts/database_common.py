@@ -44,8 +44,8 @@ def createSqlDumpScript(dbSettings, dbObjects, pathToSqlDumpScript):
 		#printOut("dbObjectType = " + dbObject.dbObjectType + " sqlScriptName = " + dbObject.sqlScriptName + " sqlObjectName = " + dbObject.sqlObjectName)
 		if len(dbObject.sqlObjectName) > 0:
 			printOut("dumping database object to disk: " + dbObject.schema + "." + dbObject.sqlObjectName, LOG_VERBOSE)
-			sqlExec = "exec sp_helptext '"+dbObject.sqlObjectName+"'" + getEndline()
-			sqlDumpScriptFile.write(getSqlExists(dbObject.dbObjectType, dbObject.sqlObjectName, sqlExec))
+			sqlExec = "exec sp_helptext '"+dbObject.schema + "." + dbObject.sqlObjectName+"'" + getEndline()
+			sqlDumpScriptFile.write(getSqlExists(dbObject.dbObjectType, dbObject.schema, dbObject.sqlObjectName, sqlExec))
 		else:
 			if dbObject.dbObjectType != 'SP_NEW' and dbObject.dbObjectType != 'UDF_NEW'and dbObject.dbObjectType != 'VIEW_NEW':
 				addWarning("Cannot backup a SQL object for SQL script " + dbObject.sqlScriptName + " as the object name is not known")
@@ -86,14 +86,14 @@ def execSqlScript(dbSettings, pathToSqlScript, outputFilepath):
 	runExe(dbSettings.sqlCmd, dbSettings.sqlCmdDirPath, args)
 
 #get some SQL which checks if the given database object exists (if not, then we cannot back it up, and its a SQL error via a 'goto')
-def getSqlExists(dbObjectType, sqlObjectName, sqlExec):
+def getSqlExists(dbObjectType, schema, sqlObjectName, sqlExec):
 	existsLine = ""
 	if dbObjectType == "VIEW":
-		existsLine = "IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"'))" + getEndline()
+		existsLine = "IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"'))" + getEndline()
 	elif dbObjectType == "SP":
-		existsLine = "IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"') AND type in (N'P', N'PC'))" + getEndline()
+		existsLine = "IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"') AND type in (N'P', N'PC'))" + getEndline()
 	elif dbObjectType == "UDF":
-		existsLine = "IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))"
+		existsLine = "IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))"
 	if len(existsLine) > 0:
 		sqlExists = existsLine
 		sqlExists = sqlExists + "BEGIN" + getEndline()
@@ -102,7 +102,7 @@ def getSqlExists(dbObjectType, sqlObjectName, sqlExec):
 		#add Else as an error (since if it does not exist, then we cannot backup!)
 		sqlExists = sqlExists + "ELSE" + getEndline()
 		sqlExists = sqlExists + "BEGIN" + getEndline()
-		sqlExists = sqlExists + "select @currentObjectName = '" + sqlObjectName + "'"+ getEndline()
+		sqlExists = sqlExists + "select @currentObjectName = '" + schema + "." + sqlObjectName + "'"+ getEndline()
 		sqlExists = sqlExists + "goto ERROR_CANNOT_BACKUP" + getEndline()
 		sqlExists = sqlExists + "END" + getEndline()
 		return sqlExists
