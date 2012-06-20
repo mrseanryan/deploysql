@@ -139,7 +139,9 @@ class ViewFactory(DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(ViewFactory,self).__init__('VIEW', 'View')
 
-#TODO - Triggers
+#TODO - dump tables
+#TODO - dump schemas
+#TODO - dump Triggers
 
 #factory function, to create appropriate factory:
 def CreateDatabaseObjectFactory(dbObjectType):
