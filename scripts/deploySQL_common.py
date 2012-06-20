@@ -1,15 +1,20 @@
 """
-common code used by DeploySQL.py
+common code used by DeploySQL.py + CopySQLtoDeploy.py
+
+- print out progress & results
+- processing files
 """
 
 #Dependencies:		Python 2.x
 
 import csv
 import sys
-from os.path import exists, join
+from os.path import *
 
 #pathsep ; on windows  , on unix
 from os import mkdir, pathsep
+
+import subprocess
 
 ###############################################################
 # settings:
@@ -21,7 +26,6 @@ logVerbosity = LOG_NORMAL
 numWarnings = 0
 
 #set mapping from dbObject type -> subdirectory, to locate SQL scripts:
-#TODO move to common!
 dictDbObjectTypeToSubDir = dict()
 dictDbObjectTypeToSubDir['SCHEMA_CREATE'] = "schemas\\"
 dictDbObjectTypeToSubDir['SP'] = "storedProcedures\\"
@@ -45,6 +49,14 @@ class DatabaseObject:
 		self.dbObjectType = dbObjectType
 		self.sqlObjectName = sqlObjectName
 		self.sqlScriptName = sqlScriptName
+		self.schema = 'dbo'
+
+	def __init__(self, dbVersion, dbObjectType, sqlObjectName, sqlScriptName, schema):
+		self.dbVersion = long(dbVersion)
+		self.dbObjectType = dbObjectType
+		self.sqlObjectName = sqlObjectName
+		self.sqlScriptName = sqlScriptName
+		self.schema = schema
 
 ###############################################################
 #FUNCTIONS
@@ -68,35 +80,19 @@ def ask_ok(prompt, retries=3, complaint='Yes or no, please!'):
             raise IOError('refusenik user')
         print complaint        
 
+def debugOut(message):
+	printOut(message, LOG_VERBOSE)
+
 def ensureDirExists(dirPath):
 	if not exists(dirPath):
 		mkdir(dirPath)
 
+def getEndline():
+	return "\r\n" #OK for Windows
+
 #provide access to the global that is in this module:
 def getNumWarnings():
 	return numWarnings
-
-def parseSqlScriptName(dbObjectType, sqlScriptName):
-	#we need to parse names like this:
-	#dbo.spLicenceDocLoader_IsLicenceTypeSigned.SQL
-	#dbo.spAmateurExam_Licence.StoredProcedure.sql
-	sqlObjectName = ""
-	if (dbObjectType == 'SP'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.storedprocedure', '')
-	if (dbObjectType == 'UDF'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.UserDefinedFunction', '')
-	elif (dbObjectType == 'VIEW'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.view', '')
-	else:
-		if dbObjectType != 'SP_NEW' and dbObjectType != 'UDF_NEW' and dbObjectType != 'VIEW_NEW':
-			addWarning("Cannot determine original object for the SQL script " + sqlScriptName)
-	return sqlObjectName
 
 #printOut()
 #this function prints out, according to user's options for verbosity
@@ -111,6 +107,14 @@ def printOut(txt, verb = LOG_NORMAL, bNewLine = True):
 	elif(logVerbosity >= verb):
 		sys.stdout.write(txt)
 		
+
+def readFromFileIntoString(filepath):
+	strContents = ''
+	with open(filepath, 'r') as file:
+		for line in file:
+			strContents = strContents + line
+
+	return strContents
 
 def readListfile(sqlScriptListfilePath):
 	#read in the list of database objects:
@@ -127,6 +131,20 @@ def readListfile(sqlScriptListfilePath):
 			#printOut("dbObjectType = " + dbObjectType + " sqlScriptName = " + sqlScriptName + " sqlObjectName = " + sqlObjectName)
 			dbObjects.append(DatabaseObject(dbVersion,dbObjectType, sqlObjectName, sqlScriptName))
 	return dbObjects
+
+def runExe(targetScriptName, targetScriptDirPath, args):
+	scriptWorkingDir = targetScriptDirPath #os.path.dirname(targetScriptPath)
+	toExec = join(targetScriptDirPath, targetScriptName) + " " + args
+	printOut("Running exe " + toExec, LOG_VERBOSE)
+	printOut("working dir = " + scriptWorkingDir, LOG_VERBOSE)
+	process = subprocess.Popen(toExec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = scriptWorkingDir)
+	(stdout_cap, stderr_cap) = process.communicate()
+	if(len(stderr_cap) > 0):
+		raise Exception(str(stderr_cap))
+	if(len(stdout_cap) > 0):
+		printOut(" >> " + str(stdout_cap));
+	if(process.returncode != 0):
+		raise Exception("Process returned error code:" + str(process.returncode))
 
 #set the global in this module
 def setLogVerbosity(verbosity):

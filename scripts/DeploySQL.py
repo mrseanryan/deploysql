@@ -34,12 +34,12 @@ import re
 import os
 import pyodbc
 import shutil
-import subprocess
 import win32api
 
 from string import split
 
 from deploySQL_common import *
+from database_common import *
 
 
 ###############################################################
@@ -114,65 +114,6 @@ if __name__ == "__main__":
 ###############################################################
 #FUNCTIONS
 
-def createSqlDumpScript(dbObjects, pathToSqlDumpScript):
-	global sqlDbName
-	if os.path.exists(pathToSqlDumpScript):
-		os.remove(pathToSqlDumpScript)
-	sqlDumpScriptFile = open(pathToSqlDumpScript, 'w+')
-	sqlDumpScriptFile.write('use ' + sqlDbName + getEndline())
-	sqlDumpScriptFile.write(getEndline() + "GO" + getEndline()) # need a GO before any CREATE/ALTER PROCEDURE
-	sqlDumpScriptFile.write("declare @currentObjectName varchar(200)" + getEndline())
-	sqlDumpScriptFile.write("select @currentObjectName = 'unknown'" + getEndline())
-	sqlDumpScriptFile.write(getEndline())
-	
-	for dbObject in dbObjects:
-		#printOut("dbObjectType = " + dbObject.dbObjectType + " sqlScriptName = " + dbObject.sqlScriptName + " sqlObjectName = " + dbObject.sqlObjectName)
-		if len(dbObject.sqlObjectName) > 0:
-			printOut("backing up database object " + dbObject.sqlObjectName)
-			sqlExec = "exec sp_helptext '"+dbObject.sqlObjectName+"'" + getEndline()
-			sqlDumpScriptFile.write(getSqlExists(dbObject.dbObjectType, dbObject.sqlObjectName, sqlExec))
-		else:
-			if dbObject.dbObjectType != 'SP_NEW' and dbObject.dbObjectType != 'UDF_NEW'and dbObject.dbObjectType != 'VIEW_NEW':
-				addWarning("Cannot backup a SQL object for SQL script " + dbObject.sqlScriptName + " as the object name is not known")
-	#add 'goto' for handling errors:
-	sqlErrorGoto = "goto OK" + getEndline()
-	sqlErrorGoto = sqlErrorGoto + "ERROR_CANNOT_BACKUP:" + getEndline()
-	sqlErrorGoto = sqlErrorGoto + "RAISERROR (N'Cannot backup object %s, as it does not exist', 11 /*Severity*/, 1 /*State*/, @currentObjectName )" + getEndline()
-	sqlErrorGoto = sqlErrorGoto + "OK:" + getEndline() #label to allow OK run to skip the error label
-	sqlDumpScriptFile.write(sqlErrorGoto)
-	sqlDumpScriptFile.write("GO" + getEndline())
-
-def backupOriginalObjects(dbObjects, outputFilepath):
-	global sqlServerInstance, sqlCmdPath
-	#create the SQL file which will dump out the required database objects:
-	pathToSqlDumpScript = "temp.dumpSQLobjects.sql"
-	createSqlDumpScript(dbObjects, pathToSqlDumpScript)
-	#exec the dump script:
-	execSqlScript(pathToSqlDumpScript, outputFilepath)
-
-def createConnection():
-	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword
-	connStr = ( r'DRIVER={SQL Server};SERVER=' +
-	sqlServerInstance + ';DATABASE=' + sqlDbName + ';' +
-	'Uid=' + sqlUser + ";Pwd=" + sqlPassword + ";"    )
-	conn = pyodbc.connect(connStr)
-	return conn
-	
-def createCursor(dbConnection):
-	cursor = dbConnection.cursor()
-	return cursor
-	
-def execSqlScript(pathToSqlScript, outputFilepath):
-	global sqlServerInstance, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath
-	
-	#sqlcmd.exe - ref:   http://msdn.microsoft.com/en-us/library/ms162773.aspx
-	
-	#sqlcmd -S (local) -U <user> -P <password>   -i dumpDatabaseObject.sql  -o originalSQL.sql
-	pathToSqlScript = os.path.abspath(pathToSqlScript)
-	outputFilepath = os.path.abspath(outputFilepath)
-	args = "-S " + sqlServerInstance + " -U " + sqlUser + " -P " + sqlPassword + " -i " + pathToSqlScript + " -o " + outputFilepath + " -r 0 -b -m -1"    #-b is to exit on SQL error
-	runExe(sqlCmd, sqlCmdDirPath, args)
-
 def filterObjectsByDbVersion(dbVersion, dbObjects):
 	dbFilteredObjects = []
 	for dbObject in dbObjects:
@@ -195,9 +136,6 @@ def getCurrentDatabaseVersion(dbConn):
 	
 	cursor.close()
 	return dbVersion
-	
-def getEndline():
-	return "\r\n" #OK for Windows
 
 def getHighestVersion(dbObjects):
 	highestDbVersion = 00000000
@@ -207,33 +145,9 @@ def getHighestVersion(dbObjects):
 	return long(highestDbVersion)
 
 #get todays date, in Sql Server format
-def getSQLdateToday():
-	#xxx
-	return "'2012-02-20 18:24:44.383'"
-	
-#get some SQL which checks if the given database object exists (if not, then we cannot back it up, and its a SQL error via a 'goto')
-def getSqlExists(dbObjectType, sqlObjectName, sqlExec):
-	existsLine = ""
-	if dbObjectType == "VIEW":
-		existsLine = "IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"'))" + getEndline()
-	elif dbObjectType == "SP":
-		existsLine = "IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"') AND type in (N'P', N'PC'))" + getEndline()
-	elif dbObjectType == "UDF":
-		existsLine = "IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+sqlObjectName+"') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))"
-	if len(existsLine) > 0:
-		sqlExists = existsLine
-		sqlExists = sqlExists + "BEGIN" + getEndline()
-		sqlExists = sqlExists + sqlExec + getEndline()
-		sqlExists = sqlExists + "END" + getEndline()
-		#add Else as an error (since if it does not exist, then we cannot backup!)
-		sqlExists = sqlExists + "ELSE" + getEndline()
-		sqlExists = sqlExists + "BEGIN" + getEndline()
-		sqlExists = sqlExists + "select @currentObjectName = '" + sqlObjectName + "'"+ getEndline()
-		sqlExists = sqlExists + "goto ERROR_CANNOT_BACKUP" + getEndline()
-		sqlExists = sqlExists + "END" + getEndline()
-		return sqlExists
-	else:
-		raise Exception("not implemented: check for existence of database object type " + dbObjectType)
+#def getSQLdateToday():
+#	#xxx
+#	return "'2012-02-20 18:24:44.383'"
 
 def getTempDir():
 	return os.environ['TEMP'] + '\\'
@@ -254,22 +168,9 @@ def outputSummary(dbObjects, dbFilteredObjects, bDbWasUpgraded, newDbVersion, nu
 		printOut("The database was NOT upgraded")
 	#TODO - add more summary info
 
-def runExe(targetScriptName, targetScriptDirPath, args):
-	scriptWorkingDir = targetScriptDirPath #os.path.dirname(targetScriptPath)
-	toExec = os.path.join(targetScriptDirPath, targetScriptName) + " " + args
-	printOut("Running exe " + toExec)
-	printOut("working dir = " + scriptWorkingDir)
-	process = subprocess.Popen(toExec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = scriptWorkingDir)
-	(stdout_cap, stderr_cap) = process.communicate()
-	if(len(stderr_cap) > 0):
-		raise Exception(str(stderr_cap))
-	printOut(" >> " + str(stdout_cap));
-	if(process.returncode != 0):
-		raise Exception("Process returned error code:" + str(process.returncode))
-
-def runNewSQLscripts(dbObjects, pathToNewSqlDir, outputFilepath):
+def runNewSQLscripts(dbSettings, dbObjects, pathToNewSqlDir, outputFilepath):
 	numScriptsRan = 0
-	global sqlDbName, dictDbObjectTypeToSubDir, IsDummyRun
+	global dictDbObjectTypeToSubDir, IsDummyRun
 	for dbObject in dbObjects:
 		#we need to specify the database name, so we copy the script, and prefix a 'use' clause
 		sqlScriptCopy = getTempDir() + dbObject.sqlScriptName
@@ -285,7 +186,7 @@ def runNewSQLscripts(dbObjects, pathToNewSqlDir, outputFilepath):
 		sqlOrigFile = open(pathToSqlScript, 'r')
 		sqlCopyFile = open(sqlScriptCopy, 'w')
 		
-		sqlCopyFile.write('use ' + sqlDbName + getEndline())
+		sqlCopyFile.write('use ' + dbSettings.sqlDbName + getEndline())
 		sqlCopyFile.write(getEndline() + "GO" + getEndline()) # need a GO before any CREATE/ALTER PROCEDURE
 	
 		#now just append the rest of the original file: (with replacements)
@@ -317,7 +218,7 @@ def runNewSQLscripts(dbObjects, pathToNewSqlDir, outputFilepath):
 		
 		if not IsDummyRun:
 			#exec the copy of the original SQL script:
-			execSqlScript(sqlScriptCopy, outputFilepath)
+			execSqlScript(dbSettings, sqlScriptCopy, outputFilepath)
 			numScriptsRan = numScriptsRan + 1
 	return numScriptsRan
 
@@ -343,14 +244,16 @@ def validateArgs(sqlScriptListfilePath, origOutputFilepath):
 #main
 validateArgs(sqlScriptListfilePath, origOutputFilepath)
 
-dbConn = createConnection()
+dbSettings = DatabaseConnectiongSettings(sqlServerInstance, sqlDbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
+
+dbConn = createConnection(dbSettings)
 dbVersion = getCurrentDatabaseVersion(dbConn)
 
 dbObjects = readListfile(sqlScriptListfilePath)
 dbFilteredObjects = filterObjectsByDbVersion(dbVersion, dbObjects)
 
-backupOriginalObjects(dbFilteredObjects, origOutputFilepath)
-numScriptsRan=runNewSQLscripts(dbFilteredObjects, pathToNewSqlDir, newOutputFilepath)
+backupOriginalObjects(dbSettings, dbFilteredObjects, origOutputFilepath)
+numScriptsRan=runNewSQLscripts(dbSettings, dbFilteredObjects, pathToNewSqlDir, newOutputFilepath)
 highestDbVersion = getHighestVersion(dbFilteredObjects)
 bDbWasUpgraded = setCurrentDatabaseVersion(dbConn, dbVersion, highestDbVersion)
 outputSummary(dbObjects, dbFilteredObjects, bDbWasUpgraded, highestDbVersion, numScriptsRan)
