@@ -6,9 +6,10 @@ SET DEBUG_ON=-d
 REM comment this out, to turn on debugging:
 SET DEBUG_ON=
 
-SET OUTDIR=%TEMP%\dumpSql
+SET OUTDIR=..\..\..\..\hg_LING_main\LINGandLicensing\LING\sql\database_scripts
 
-if not exist %OUTDIR% (mkdir %OUTDIR%)
+if not exist %OUTDIR% (dir_not_found)
+IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
 

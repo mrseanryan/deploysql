@@ -90,8 +90,7 @@ def main(argv):
 			setLogVerbosity(LOG_WARNINGS)
 
 	prompt = "Please enter the password for server: " + sqlServerInstance + " database: " + sqlDbName + " user: " + sqlUser + " "
-	#xxxx sqlPassword = getpass.getpass(prompt)
-	sqlPassword = "skyandsing3"
+	sqlPassword = getpass.getpass(prompt)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
@@ -174,7 +173,7 @@ dictDbObjectTypeToSqlScript['VIEW'] = "listViews.sql"
 ###############################################################
 #FUNCTIONS
 
-def cleanupSqlScript(outputFilepath):
+def cleanupSqlScript(dbSettings, outputFilepath):
 	"""
 	tidies up the SQL script that we have dumped out of the database
 	"""
@@ -182,7 +181,8 @@ def cleanupSqlScript(outputFilepath):
 		#fileOut = tempfile.NamedTemporaryFile('w+') #w+ truncates any existing file
 		tempFilepath = getTempDir() + "\\dumpSql.cleanup.temp"
 		with open(tempFilepath, "w+") as fileOut: #w+ truncates any existing file
-			writeHeader(fileOut)
+			writeHeader(dbSettings, fileOut)
+			#NOT adding an IF EXISTS, as these are always CREATE scripts (and we do not want to duplicate the SQL for an ALTER script)
 			bFirst = True
 			numLinesToSkip = 0
 			for line in file:
@@ -207,9 +207,9 @@ def hasLineAllSpaces(line):
 			return False
 	return True
 
-def writeHeader(file):
+def writeHeader(dbSettings, file):
 	#do NOT write a date or anything else that would change, as then ALL files will show as changed by the source control system!
-	file.writelines( ("-- dumped from database by dumpSqlObjectsToDisk.py =======================", "\n") )
+	file.writelines( ("-- dumped from database '"+dbSettings.sqlDbName+"' by dumpSqlObjectsToDisk.py =======================", "\n") )
 
 def findExistingDatabaseObjects(dbConn):
 	dbObjects = []
@@ -264,7 +264,7 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 		
 		try:
 			backupOriginalObjects(dbSettings, dbObjectsThisScript, outputFilepath)
-			cleanupSqlScript(outputFilepath)
+			cleanupSqlScript(dbSettings, outputFilepath)
 		except Exception, ex:
 			errors.append( (dbObject, ex) )
 			
@@ -281,10 +281,10 @@ def getErrorSummary(errors):
 	return summary
 
 def showResults(dbObjects, pathToOutputDir, errors):
+	printOut(getErrorSummary(errors))
+	printOut(getEndline())
 	printOut(str(len(dbObjects) )+ " objects were dumped to disk at " + pathToOutputDir)
 	printOut(str(len(errors)) + " errors occurred")
-	printOut(getEndline())
-	printOut(getErrorSummary(errors))
 
 ###############################################################
 #MAIN
