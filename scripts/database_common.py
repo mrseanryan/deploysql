@@ -93,7 +93,7 @@ def getSqlExists(dbObjectType, schema, sqlObjectName, sqlExec):
 	elif dbObjectType == "SP":
 		existsLine = "IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"') AND type in (N'P', N'PC'))" + getEndline()
 	elif dbObjectType == "UDF":
-		existsLine = "IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))"
+		existsLine = "IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'"+schema + "." + sqlObjectName+"') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))"
 	if len(existsLine) > 0:
 		sqlExists = existsLine
 		sqlExists = sqlExists + "BEGIN" + getEndline()

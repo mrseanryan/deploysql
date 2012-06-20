@@ -139,9 +139,9 @@ class ViewFactory(DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(ViewFactory,self).__init__('VIEW', 'View')
 
-#TODO - dump tables
-#TODO - dump schemas
-#TODO - dump Triggers
+#TODO - dump tables - profile SSMS as it does this
+#TODO - dump schemas - use sp_helptext
+#TODO - dump Triggers - use sp_helptext
 
 #factory function, to create appropriate factory:
 def CreateDatabaseObjectFactory(dbObjectType):
@@ -253,6 +253,11 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 	currentType = ""
 	for dbObject in dbObjects:
 		currentType = printCurrentType(dbObject, currentType)
+		
+		if 'sfbIsBankHoliday' in dbObject.sqlScriptName :
+			import pdb
+			pdb.set_trace()
+		
 		dbObjectsThisScript = [dbObject]
 		dir = pathToOutputDir + "\\" + dictDbObjectTypeToSubDir[dbObject.dbObjectType]
 		
