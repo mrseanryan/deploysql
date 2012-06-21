@@ -7,7 +7,7 @@ we place each database object type in its own directory.
 
 The file names follow the convention used by SSMS when it performs a dump-to-disk operation.
 
-USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
+USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory> <path to error log file>
 
 OPTIONS:
 
@@ -26,6 +26,7 @@ import getopt
 import getpass
 
 import sys
+import traceback
 
 import win32api
 
@@ -42,6 +43,7 @@ sqlDbName = ""
 sqlUser = ""
 sqlPassword = ""
 pathToOutputDir = ""
+errorLogFilepath = ""
 
 # unfortunately, need to use short file paths, to execute a process.  Using pywin32 to get around this, by converting path to short paths.
 sqlCmd = "sqlcmd.exe"
@@ -58,14 +60,14 @@ def usage():
 #args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
 def main(argv):
 	
-	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath
+	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, errorLogFilepath
 
 	try:
 		opts, args = getopt.getopt(argv, "dhw", ["debug", "help", "warnings"])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
-	if(len(args) !=5):
+	if(len(args) !=6):
 		usage()
 		sys.exit(3)
 	#assign the args to variables:
@@ -74,6 +76,7 @@ def main(argv):
 	sqlUser = args[2]
 	pathToOutputDir = args[3]
 	sqlCmdDirPath = args[4]
+	errorLogFilepath = args[5]
 	
 	#convert sqlCmdDirPath to short file names:
 	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
@@ -254,9 +257,9 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 	for dbObject in dbObjects:
 		currentType = printCurrentType(dbObject, currentType)
 		
-		if 'sfbIsBankHoliday' in dbObject.sqlScriptName :
-			import pdb
-			pdb.set_trace()
+		#if 'sfbIsBankHoliday' in dbObject.sqlScriptName :
+		#	import pdb
+		#	pdb.set_trace()
 		
 		dbObjectsThisScript = [dbObject]
 		dir = pathToOutputDir + "\\" + dictDbObjectTypeToSubDir[dbObject.dbObjectType]
@@ -273,7 +276,8 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 			backupOriginalObjects(dbSettings, dbObjectsThisScript, outputFilepath)
 			cleanupSqlScript(dbSettings, outputFilepath)
 		except Exception, ex:
-			errors.append( (dbObject, ex) )
+			strEx = traceback.format_exc()
+			errors.append( (dbObject, strEx) )
 			
 		iNumObjectsProcessed = iNumObjectsProcessed + 1
 		printOut("\r" + str((iNumObjectsProcessed * 100) / numObjects) + "%", LOG_WARNINGS, False) #show some progress, even if low verbosity
@@ -287,11 +291,21 @@ def getErrorSummary(errors):
 		summary = summary + "failed to dump object " + str(dbObject.schema) + "." + str(dbObject.sqlObjectName) + getEndline()
 	return summary
 
-def showResults(dbObjects, pathToOutputDir, errors):
+def logErrors(errors, errorLogFilepath):
+	if(len(errors) > 0):
+		if(len(errorLogFilepath) == 0):
+			errorLogFilepath = "sqlDump.errors.log"
+		errorFile = open(errorLogFilepath, 'w+') #overwrite existing file
+		for (dbObject, ex) in errors:
+			errorFile.write(">> Could not dump object " + dbObject.GetFullname() + " - error: " + ex)
+		printOut("Please see the file "+errorLogFilepath+"for more details")
+
+def showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath):
 	printOut(getErrorSummary(errors))
 	printOut(getEndline())
 	printOut(str(len(dbObjects) )+ " objects were dumped to disk at " + pathToOutputDir)
 	printOut(str(len(errors)) + " errors occurred")
+	logErrors(errors, errorLogFilepath)
 
 ###############################################################
 #MAIN
@@ -305,6 +319,6 @@ dbObjects = findExistingDatabaseObjects(dbConn)
 errors = [] #(dbObject, ex)
 dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors)
 
-showResults(dbObjects, pathToOutputDir, errors)
+showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath)
 
 ###############################################################

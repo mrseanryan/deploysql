@@ -58,6 +58,9 @@ class DatabaseObject:
 		self.sqlScriptName = sqlScriptName
 		self.schema = schema
 
+	def GetFullname(self):
+		return self.schema + "." + self.dbObjectType
+
 ###############################################################
 #FUNCTIONS
 
