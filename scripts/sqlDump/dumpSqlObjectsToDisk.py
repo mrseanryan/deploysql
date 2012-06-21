@@ -7,10 +7,11 @@ we place each database object type in its own directory.
 
 The file names follow the convention used by SSMS when it performs a dump-to-disk operation.
 
-USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory> <path to error log file>
+USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name or CSV file listing databases> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
 
 OPTIONS:
 
+	-c -csv		Database name is actually a CSV file, listing databases to dump.  This allows user to login just once per database server.
 	-d -debug		Show extra info to help debugging.
 	-h -help		Show this help message.
 	-w -warnings		Show warnings only (non-verbose output)
@@ -21,6 +22,14 @@ OPTIONS:
 #Python 2.7.x
 #pywin32 - http://sourceforge.net/projects/pywin32/
 #pyodbc - http://code.google.com/p/pyodbc/downloads/list
+
+
+#TODO - dump tables - profile SSMS as it does this. probably need to build up the CREATE SQL in python.
+#TODO - dump schemas - use sp_helptext
+#TODO - dump Triggers - use sp_helptext
+#TODO - sub-progress, per dbObjectType
+
+import csv
 
 import getopt
 import getpass
@@ -45,6 +54,9 @@ sqlPassword = ""
 pathToOutputDir = ""
 errorLogFilepath = ""
 
+bIsDbNameAcsvFile = False
+dbDetailsList = []
+
 # unfortunately, need to use short file paths, to execute a process.  Using pywin32 to get around this, by converting path to short paths.
 sqlCmd = "sqlcmd.exe"
 #sqlCmdDirPath = "c:\Progra~1\MI6841~1\90\Tools\Binn\\"
@@ -54,49 +66,6 @@ sqlCmdDirPath = ""
 #usage() - prints out the usage text, from the top of this file :-)
 def usage():
     print __doc__
-
-###############################################################
-#main() - main program entry point
-#args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
-def main(argv):
-	
-	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, errorLogFilepath
-
-	try:
-		opts, args = getopt.getopt(argv, "dhw", ["debug", "help", "warnings"])
-	except getopt.GetoptError:
-		usage()
-		sys.exit(2)
-	if(len(args) !=6):
-		usage()
-		sys.exit(3)
-	#assign the args to variables:
-	sqlServerInstance = args[0]
-	sqlDbName = args[1]
-	sqlUser = args[2]
-	pathToOutputDir = args[3]
-	sqlCmdDirPath = args[4]
-	errorLogFilepath = args[5]
-	
-	#convert sqlCmdDirPath to short file names:
-	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
-	sqlCmdDirPath = win32api.GetShortPathName(sqlCmdDirPath)
-	
-	for opt, arg in opts:
-		if opt in ("-h", "--help"):
-			usage()
-			sys.exit()
-		elif opt in ("-d", "--debug"):
-			#debug mode:
-			setLogVerbosity(LOG_VERBOSE)
-		elif opt in ("-w", "--warnings"):
-			setLogVerbosity(LOG_WARNINGS)
-
-	prompt = "Please enter the password for server: " + sqlServerInstance + " database: " + sqlDbName + " user: " + sqlUser + " "
-	sqlPassword = getpass.getpass(prompt)
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
 
 ###############################################################
 #CLASSES
@@ -141,10 +110,6 @@ class ViewFactory(DatabaseObjectFactoryBase):
 	"""factory for creating an in-memory DatabaseObject for View"""
 	def __init__(self):
 		super(ViewFactory,self).__init__('VIEW', 'View')
-
-#TODO - dump tables - profile SSMS as it does this
-#TODO - dump schemas - use sp_helptext
-#TODO - dump Triggers - use sp_helptext
 
 #factory function, to create appropriate factory:
 def CreateDatabaseObjectFactory(dbObjectType):
@@ -211,6 +176,20 @@ def hasLineAllSpaces(line):
 		if char != ' ' and char != '\r' and char != '\n':
 			return False
 	return True
+
+def readDbNamesFile(dbNamesFilepath):
+	dbDetails = []
+	listFileReader = csv.reader(open(dbNamesFilepath, 'rb'), delimiter=',')
+	for row in listFileReader:
+		if(len(row) > 0):
+			dbName = row[0]
+			if(dbName[0] == '#'):
+				continue # a comment line
+			dbOutDirPath = row[1]
+			
+			dbDetails.append( (dbName, dbOutDirPath) )
+	
+	return dbDetails
 
 def writeHeader(dbSettings, file):
 	#do NOT write a date or anything else that would change, as then ALL files will show as changed by the source control system!
@@ -298,7 +277,7 @@ def logErrors(errors, errorLogFilepath):
 		errorFile = open(errorLogFilepath, 'w+') #overwrite existing file
 		for (dbObject, ex) in errors:
 			errorFile.write(">> Could not dump object " + dbObject.GetFullname() + " - error: " + ex)
-		printOut("Please see the file "+errorLogFilepath+"for more details")
+		printOut("Please see the file "+errorLogFilepath+" for more details")
 
 def showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath):
 	printOut(getErrorSummary(errors))
@@ -308,17 +287,74 @@ def showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath):
 	logErrors(errors, errorLogFilepath)
 
 ###############################################################
+#main() - main program entry point
+#args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
+def main(argv):
+	
+	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, bIsDbNameAcsvFile, dbDetailsList
+
+	try:
+		opts, args = getopt.getopt(argv, "cdhw", ["csv", "debug", "help", "warnings"])
+	except getopt.GetoptError:
+		usage()
+		sys.exit(2)
+	if(len(args) !=5):
+		usage()
+		sys.exit(3)
+	#assign the args to variables:
+	sqlServerInstance = args[0]
+	sqlDbName = args[1]
+	sqlUser = args[2]
+	pathToOutputDir = args[3]
+	sqlCmdDirPath = args[4]
+	
+	#convert sqlCmdDirPath to short file names:
+	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
+	sqlCmdDirPath = win32api.GetShortPathName(sqlCmdDirPath)
+	
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			usage()
+			sys.exit()
+		elif opt in ("-c", "--csv"):
+			bIsDbNameAcsvFile = True
+		elif opt in ("-d", "--debug"):
+			#debug mode:
+			setLogVerbosity(LOG_VERBOSE)
+		elif opt in ("-w", "--warnings"):
+			setLogVerbosity(LOG_WARNINGS)
+
+	if(bIsDbNameAcsvFile):
+		dbDetailsList = readDbNamesFile(sqlDbName)
+		(firstDbName, dbOutDir) = dbDetailsList[0]
+		sqlDbName = firstDbName #use the first database, to get the password from user
+	else:
+		dbDetailsList.append( (sqlDbName, pathToOutputDir) )
+	prompt = "Please enter the password for server: " + sqlServerInstance + " database: " + sqlDbName + " user: " + sqlUser + " "
+	sqlPassword = getpass.getpass(prompt)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+
+###############################################################
 #MAIN
 
-dbSettings = DatabaseConnectiongSettings(sqlServerInstance, sqlDbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
+for (dbName, dbOutDir) in dbDetailsList:
 
-dbConn = createConnection(dbSettings)
+	printOut(" ____________________________________________")
+	printOut("Processing database " + dbName + "..." )
 
-dbObjects = findExistingDatabaseObjects(dbConn)
+	errorLogFilepath = "sqlDump." + dbName + ".errors.log"
 
-errors = [] #(dbObject, ex)
-dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors)
+	dbSettings = DatabaseConnectiongSettings(sqlServerInstance, dbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
 
-showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath)
+	dbConn = createConnection(dbSettings)
+
+	dbObjects = findExistingDatabaseObjects(dbConn)
+
+	errors = [] #(dbObject, ex)
+	dumpObjectsToDisk(dbSettings, dbObjects, dbOutDir, errors)
+
+	showResults(dbObjects, dbOutDir, errors, errorLogFilepath)
 
 ###############################################################

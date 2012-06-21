@@ -22,7 +22,7 @@ IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
 
-dumpSqlObjectsToDisk.py  %DEBUG_ON% 192.168.0.203\SQL2005DEV %DBNAME% licensing %OUTDIR% "c:\Program Files\Microsoft SQL Server\100\Tools\binn"   sqlDump.eLicensing_UP_ToWEB.errors.log
+dumpSqlObjectsToDisk.py  %DEBUG_ON% 192.168.0.203\SQL2005DEV %DBNAME% licensing %OUTDIR% "c:\Program Files\Microsoft SQL Server\100\Tools\binn"
 IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
