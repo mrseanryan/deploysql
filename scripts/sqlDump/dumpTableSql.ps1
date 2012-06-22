@@ -7,6 +7,8 @@
 #
 #ref: http://stackoverflow.com/questions/21547/in-sql-server-how-do-i-generate-a-create-table-statement-for-a-given-table
 #
+#ref: http://msdn.microsoft.com/en-us/library/microsoft.sqlserver.management.smo.scriptingoptions.aspx#Y240
+#
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO")  | out-null
 
 # ===============================================================
