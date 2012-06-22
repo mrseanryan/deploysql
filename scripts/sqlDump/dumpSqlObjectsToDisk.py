@@ -7,7 +7,7 @@ we place each database object type in its own directory.
 
 The file names follow the convention used by SSMS when it performs a dump-to-disk operation.
 
-USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name or CSV file listing databases> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
+USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name or CSV file listing databases> <SQL user> <path to output directory> <path to sqlcmd.exe directory> <path to Powershell.exe>
 
 OPTIONS:
 
@@ -62,6 +62,8 @@ sqlCmd = "sqlcmd.exe"
 #sqlCmdDirPath = "c:\Progra~1\MI6841~1\90\Tools\Binn\\"
 sqlCmdDirPath = ""
 
+pathToPowershell = ""
+
 ###############################################################
 #usage() - prints out the usage text, from the top of this file :-)
 def usage():
@@ -96,11 +98,6 @@ class SchemaFactory (DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(SchemaFactory , self).__init__('SCHEMA_CREATE', 'Schema')
 
-class TableFactory(DatabaseObjectFactoryBase):
-	"""factory for creating an in-memory DatabaseObject for Table"""
-	def __init__(self):
-		super(TableFactory, self).__init__('TABLE_CREATE', 'Table')
-		
 class UserFunctionFactory(DatabaseObjectFactoryBase):
 	"""factory for creating an in-memory DatabaseObject for User Defined Function"""
 	def __init__(self):
@@ -111,6 +108,14 @@ class ViewFactory(DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(ViewFactory,self).__init__('VIEW', 'View')
 
+class NullDatabaseObjectFactory(DatabaseObjectFactoryBase):
+	"""factory for creating an in-memory DatabaseObject for Null case (do-nothing) """
+	def __init__(self):
+		super(NullDatabaseObjectFactory,self).__init__('NULL', 'Null')
+
+	def CreateDatabaseObject(self, row):
+		return None
+
 #factory function, to create appropriate factory:
 def CreateDatabaseObjectFactory(dbObjectType):
 	if (dbObjectType == 'SCHEMA_CREATE'):
@@ -118,7 +123,7 @@ def CreateDatabaseObjectFactory(dbObjectType):
 	elif (dbObjectType == 'SP'):
 		dbObjectFactory = StoredProcedureFactory()
 	elif (dbObjectType == 'TABLE_CREATE'):
-		dbObjectFactory = TableFactory()
+		dbObjectFactory = NullDatabaseObjectFactory() #tables are handled by a Powershell script
 	elif (dbObjectType == 'UDF'):
 		dbObjectFactory = UserFunctionFactory()
 	elif (dbObjectType == 'VIEW'):
@@ -136,7 +141,7 @@ def CreateDatabaseObjectFactory(dbObjectType):
 dictDbObjectTypeToSqlScript = dict()
 dictDbObjectTypeToSqlScript['SCHEMA_CREATE'] = "listSchemas.sql"
 dictDbObjectTypeToSqlScript['SP'] = "listUserStoredProcedures.sql"
-dictDbObjectTypeToSqlScript['TABLE_CREATE'] = "listTables.sql"
+dictDbObjectTypeToSqlScript['TABLE_CREATE'] = "listTables.sql" #TODO - remove as this is not used!
 dictDbObjectTypeToSqlScript['UDF'] = "listFunctions.sql"
 dictDbObjectTypeToSqlScript['VIEW'] = "listViews.sql"
 
@@ -212,7 +217,8 @@ def findExistingDatabaseObjects(dbConn):
 		#now perform a SELECT to get the list of objects:
 		for row in cursor:
 			dbObject = dbObjectFactory.CreateDatabaseObject(row)
-			dbObjects.append(dbObject)
+			if dbObject != None:
+				dbObjects.append(dbObject)
 		
 		cursor.close()
 	
@@ -228,7 +234,7 @@ def printCurrentType(dbObject, currentType):
 		printOut("\r" + "Dumping " + currentType + "s to disk =================", LOG_WARNINGS)
 	return currentType
 
-def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
+def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors, pathToPowershell):
 	#backup each db object to its own script (to match SSMS behaviour)
 	iNumObjectsProcessed = 0
 	numObjects = len(dbObjects)
@@ -260,8 +266,28 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 			
 		iNumObjectsProcessed = iNumObjectsProcessed + 1
 		printOut("\r" + str((iNumObjectsProcessed * 100) / numObjects) + "%", LOG_WARNINGS, False) #show some progress, even if low verbosity
-		
-	printOut("\r" + "100" + "%", LOG_WARNINGS)
+	
+	dumpTablesToDisk(dbSettings, pathToOutputDir, pathToPowershell)
+	
+	printOut("\r" + "100" + "%" + getEndline(), LOG_WARNINGS)
+	return
+
+#use external script to dump tables to SQL
+def dumpTablesToDisk(dbSettings, outputFilepath, pathToPowershell):
+	printOut(getEndline() + "Dumping tables to disk ...")
+
+	scriptToRun = "dumpTableSql.ps1"
+	outputFilepath = outputFilepath + "\\" + dictDbObjectTypeToSubDir["TABLE_CREATE"]
+	
+	scriptToRun = os.path.abspath(scriptToRun)
+	outputFilepath = os.path.abspath(outputFilepath)
+	
+	args = "-File " + scriptToRun + " " + dbSettings.sqlServerInstance + " " + dbSettings.sqlDbName + " " + sqlUser + " " + sqlPassword + " " + outputFilepath
+	
+	pathToPowershellDir = win32api.GetShortPathName(os.path.dirname(pathToPowershell))
+
+	runExe(pathToPowershell, pathToPowershellDir, args)
+
 	return
 
 def getErrorSummary(errors):
@@ -291,14 +317,15 @@ def showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath):
 #args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
 def main(argv):
 	
-	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, bIsDbNameAcsvFile, dbDetailsList
+	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, pathToPowershell
+	global bIsDbNameAcsvFile, dbDetailsList
 
 	try:
 		opts, args = getopt.getopt(argv, "cdhw", ["csv", "debug", "help", "warnings"])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
-	if(len(args) !=5):
+	if(len(args) !=6):
 		usage()
 		sys.exit(3)
 	#assign the args to variables:
@@ -307,6 +334,7 @@ def main(argv):
 	sqlUser = args[2]
 	pathToOutputDir = args[3]
 	sqlCmdDirPath = args[4]
+	pathToPowershell = args[5]
 	
 	#convert sqlCmdDirPath to short file names:
 	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
@@ -353,7 +381,7 @@ for (dbName, dbOutDir) in dbDetailsList:
 	dbObjects = findExistingDatabaseObjects(dbConn)
 
 	errors = [] #(dbObject, ex)
-	dumpObjectsToDisk(dbSettings, dbObjects, dbOutDir, errors)
+	dumpObjectsToDisk(dbSettings, dbObjects, dbOutDir, errors, pathToPowershell)
 
 	showResults(dbObjects, dbOutDir, errors, errorLogFilepath)
 

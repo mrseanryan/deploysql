@@ -1,6 +1,8 @@
 @ECHO OFF
 setlocal
 
+SET PATH_TO_PS=C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe
+
 echo .
 echo _________________________________________
 echo Dumping ALL the databases to disk ...
@@ -23,7 +25,7 @@ IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
 
-dumpSqlObjectsToDisk.py -c %DEBUG_ON% 192.168.0.203\SQL2005DEV %DBNAMES% licensing %OUTDIR% "c:\Program Files\Microsoft SQL Server\100\Tools\binn"
+dumpSqlObjectsToDisk.py -c %DEBUG_ON% 192.168.0.203\SQL2005DEV %DBNAMES% licensing %OUTDIR% "c:\Program Files\Microsoft SQL Server\100\Tools\binn" %PATH_TO_PS%
 IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
