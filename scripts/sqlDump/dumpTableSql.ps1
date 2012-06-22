@@ -41,7 +41,7 @@ $conContext.Password = $pass
 $db = $s.Databases[$dbName]
 
 $scrp = new-object ('Microsoft.SqlServer.Management.Smo.Scripter') ($s)
-$scrp.Options.AppendToFile = $True
+$scrp.Options.AppendToFile = $False
 $scrp.Options.ClusteredIndexes = $True
 $scrp.Options.DriAll = $True
 $scrp.Options.ScriptDrops = $False
@@ -49,6 +49,8 @@ $scrp.Options.IncludeHeaders = $False
 $scrp.Options.ToFileOnly = $True
 $scrp.Options.Indexes = $True
 $scrp.Options.WithDependencies = $True
+#$scrp.Options.AnsiFile = $False
+$scrp.Options.Encoding = new-object "System.Text.ASCIIEncoding"
 #$scrp.Options.FileName = $outDirPath + '\licensing_dev.Tables.SQL'
 
 #$tablearray = @()

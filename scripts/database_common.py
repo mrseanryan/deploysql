@@ -112,25 +112,4 @@ def getSqlExists(dbObjectType, schema, sqlObjectName, sqlExec):
 def getTempDir():
 	return tempfile.gettempdir()
 
-def parseSqlScriptName(dbObjectType, sqlScriptName):
-	#we need to parse names like this:
-	#dbo.spLicenceDocLoader_IsLicenceTypeSigned.SQL
-	#dbo.spAmateurExam_Licence.StoredProcedure.sql
-	sqlObjectName = ""
-	if (dbObjectType == 'SP'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.storedprocedure', '')
-	if (dbObjectType == 'UDF'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.UserDefinedFunction', '')
-	elif (dbObjectType == 'VIEW'):
-		sqlObjectName = sqlScriptName.lower()
-		sqlObjectName = sqlObjectName.replace('.sql', '')
-		sqlObjectName = sqlObjectName.replace('.view', '')
-	else:
-		if dbObjectType != 'SP_NEW' and dbObjectType != 'UDF_NEW' and dbObjectType != 'VIEW_NEW':
-			addWarning("Cannot determine original object for the SQL script " + sqlScriptName)
-	return sqlObjectName
 ###############################################################

@@ -24,7 +24,6 @@ OPTIONS:
 #pyodbc - http://code.google.com/p/pyodbc/downloads/list
 
 
-#TODO - dump tables - execute dumpTableSql.ps1
 #TODO - dump schemas - use sp_helptext
 #TODO - dump Triggers - use sp_helptext
 #TODO - sub-progress, per dbObjectType
