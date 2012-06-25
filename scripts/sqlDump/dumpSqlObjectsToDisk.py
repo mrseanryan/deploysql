@@ -7,10 +7,11 @@ we place each database object type in its own directory.
 
 The file names follow the convention used by SSMS when it performs a dump-to-disk operation.
 
-USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
+USAGE:	dumpSqlObjectsToDisk.py [OPTIONS] <SQL Server> <Database name or CSV file listing databases> <SQL user> <path to output directory> <path to sqlcmd.exe directory> <path to Powershell.exe>
 
 OPTIONS:
 
+	-c -csv		Database name is actually a CSV file, listing databases to dump.  This allows user to login just once per database server.
 	-d -debug		Show extra info to help debugging.
 	-h -help		Show this help message.
 	-w -warnings		Show warnings only (non-verbose output)
@@ -22,10 +23,18 @@ OPTIONS:
 #pywin32 - http://sourceforge.net/projects/pywin32/
 #pyodbc - http://code.google.com/p/pyodbc/downloads/list
 
+
+#TODO - dump schemas - use sp_helptext
+#TODO - dump Triggers - use sp_helptext
+#TODO - sub-progress, per dbObjectType
+
+import csv
+
 import getopt
 import getpass
 
 import sys
+import traceback
 
 import win32api
 
@@ -42,59 +51,22 @@ sqlDbName = ""
 sqlUser = ""
 sqlPassword = ""
 pathToOutputDir = ""
+errorLogFilepath = ""
+
+bIsDbNameAcsvFile = False
+dbDetailsList = []
 
 # unfortunately, need to use short file paths, to execute a process.  Using pywin32 to get around this, by converting path to short paths.
 sqlCmd = "sqlcmd.exe"
 #sqlCmdDirPath = "c:\Progra~1\MI6841~1\90\Tools\Binn\\"
 sqlCmdDirPath = ""
 
+pathToPowershell = ""
+
 ###############################################################
 #usage() - prints out the usage text, from the top of this file :-)
 def usage():
     print __doc__
-
-###############################################################
-#main() - main program entry point
-#args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
-def main(argv):
-	
-	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath
-
-	try:
-		opts, args = getopt.getopt(argv, "dhw", ["debug", "help", "warnings"])
-	except getopt.GetoptError:
-		usage()
-		sys.exit(2)
-	if(len(args) !=5):
-		usage()
-		sys.exit(3)
-	#assign the args to variables:
-	sqlServerInstance = args[0]
-	sqlDbName = args[1]
-	sqlUser = args[2]
-	pathToOutputDir = args[3]
-	sqlCmdDirPath = args[4]
-	
-	#convert sqlCmdDirPath to short file names:
-	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
-	sqlCmdDirPath = win32api.GetShortPathName(sqlCmdDirPath)
-	
-	for opt, arg in opts:
-		if opt in ("-h", "--help"):
-			usage()
-			sys.exit()
-		elif opt in ("-d", "--debug"):
-			#debug mode:
-			setLogVerbosity(LOG_VERBOSE)
-		elif opt in ("-w", "--warnings"):
-			setLogVerbosity(LOG_WARNINGS)
-
-	prompt = "Please enter the password for server: " + sqlServerInstance + " database: " + sqlDbName + " user: " + sqlUser + " "
-	#xxxx sqlPassword = getpass.getpass(prompt)
-	sqlPassword = "skyandsing3"
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
 
 ###############################################################
 #CLASSES
@@ -125,11 +97,6 @@ class SchemaFactory (DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(SchemaFactory , self).__init__('SCHEMA_CREATE', 'Schema')
 
-class TableFactory(DatabaseObjectFactoryBase):
-	"""factory for creating an in-memory DatabaseObject for Table"""
-	def __init__(self):
-		super(TableFactory, self).__init__('TABLE_CREATE', 'Table')
-		
 class UserFunctionFactory(DatabaseObjectFactoryBase):
 	"""factory for creating an in-memory DatabaseObject for User Defined Function"""
 	def __init__(self):
@@ -140,7 +107,13 @@ class ViewFactory(DatabaseObjectFactoryBase):
 	def __init__(self):
 		super(ViewFactory,self).__init__('VIEW', 'View')
 
-#TODO - Triggers
+class NullDatabaseObjectFactory(DatabaseObjectFactoryBase):
+	"""factory for creating an in-memory DatabaseObject for Null case (do-nothing) """
+	def __init__(self):
+		super(NullDatabaseObjectFactory,self).__init__('NULL', 'Null')
+
+	def CreateDatabaseObject(self, row):
+		return None
 
 #factory function, to create appropriate factory:
 def CreateDatabaseObjectFactory(dbObjectType):
@@ -149,7 +122,7 @@ def CreateDatabaseObjectFactory(dbObjectType):
 	elif (dbObjectType == 'SP'):
 		dbObjectFactory = StoredProcedureFactory()
 	elif (dbObjectType == 'TABLE_CREATE'):
-		dbObjectFactory = TableFactory()
+		dbObjectFactory = NullDatabaseObjectFactory() #tables are handled by a Powershell script
 	elif (dbObjectType == 'UDF'):
 		dbObjectFactory = UserFunctionFactory()
 	elif (dbObjectType == 'VIEW'):
@@ -167,14 +140,14 @@ def CreateDatabaseObjectFactory(dbObjectType):
 dictDbObjectTypeToSqlScript = dict()
 dictDbObjectTypeToSqlScript['SCHEMA_CREATE'] = "listSchemas.sql"
 dictDbObjectTypeToSqlScript['SP'] = "listUserStoredProcedures.sql"
-dictDbObjectTypeToSqlScript['TABLE_CREATE'] = "listTables.sql"
+dictDbObjectTypeToSqlScript['TABLE_CREATE'] = "listTables.sql" #TODO - remove as this is not used!
 dictDbObjectTypeToSqlScript['UDF'] = "listFunctions.sql"
 dictDbObjectTypeToSqlScript['VIEW'] = "listViews.sql"
 
 ###############################################################
 #FUNCTIONS
 
-def cleanupSqlScript(outputFilepath):
+def cleanupSqlScript(dbSettings, outputFilepath):
 	"""
 	tidies up the SQL script that we have dumped out of the database
 	"""
@@ -182,7 +155,8 @@ def cleanupSqlScript(outputFilepath):
 		#fileOut = tempfile.NamedTemporaryFile('w+') #w+ truncates any existing file
 		tempFilepath = getTempDir() + "\\dumpSql.cleanup.temp"
 		with open(tempFilepath, "w+") as fileOut: #w+ truncates any existing file
-			writeHeader(fileOut)
+			writeHeader(dbSettings, fileOut)
+			#NOT adding an IF EXISTS, as these are always CREATE scripts (and we do not want to duplicate the SQL for an ALTER script)
 			bFirst = True
 			numLinesToSkip = 0
 			for line in file:
@@ -207,9 +181,23 @@ def hasLineAllSpaces(line):
 			return False
 	return True
 
-def writeHeader(file):
+def readDbNamesFile(dbNamesFilepath):
+	dbDetails = []
+	listFileReader = csv.reader(open(dbNamesFilepath, 'rb'), delimiter=',')
+	for row in listFileReader:
+		if(len(row) > 0):
+			dbName = row[0]
+			if(dbName[0] == '#'):
+				continue # a comment line
+			dbOutDirPath = row[1]
+			
+			dbDetails.append( (dbName, dbOutDirPath) )
+	
+	return dbDetails
+
+def writeHeader(dbSettings, file):
 	#do NOT write a date or anything else that would change, as then ALL files will show as changed by the source control system!
-	file.writelines( ("-- dumped from database by dumpSqlObjectsToDisk.py =======================", "\n") )
+	file.writelines( ("-- dumped from database '"+dbSettings.sqlDbName+"' by dumpSqlObjectsToDisk.py =======================", "\n") )
 
 def findExistingDatabaseObjects(dbConn):
 	dbObjects = []
@@ -228,7 +216,8 @@ def findExistingDatabaseObjects(dbConn):
 		#now perform a SELECT to get the list of objects:
 		for row in cursor:
 			dbObject = dbObjectFactory.CreateDatabaseObject(row)
-			dbObjects.append(dbObject)
+			if dbObject != None:
+				dbObjects.append(dbObject)
 		
 		cursor.close()
 	
@@ -244,13 +233,18 @@ def printCurrentType(dbObject, currentType):
 		printOut("\r" + "Dumping " + currentType + "s to disk =================", LOG_WARNINGS)
 	return currentType
 
-def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
+def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors, pathToPowershell):
 	#backup each db object to its own script (to match SSMS behaviour)
 	iNumObjectsProcessed = 0
 	numObjects = len(dbObjects)
 	currentType = ""
 	for dbObject in dbObjects:
 		currentType = printCurrentType(dbObject, currentType)
+		
+		#if 'sfbIsBankHoliday' in dbObject.sqlScriptName :
+		#	import pdb
+		#	pdb.set_trace()
+		
 		dbObjectsThisScript = [dbObject]
 		dir = pathToOutputDir + "\\" + dictDbObjectTypeToSubDir[dbObject.dbObjectType]
 		
@@ -264,14 +258,35 @@ def dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors):
 		
 		try:
 			backupOriginalObjects(dbSettings, dbObjectsThisScript, outputFilepath)
-			cleanupSqlScript(outputFilepath)
+			cleanupSqlScript(dbSettings, outputFilepath)
 		except Exception, ex:
-			errors.append( (dbObject, ex) )
+			strEx = traceback.format_exc()
+			errors.append( (dbObject, strEx) )
 			
 		iNumObjectsProcessed = iNumObjectsProcessed + 1
 		printOut("\r" + str((iNumObjectsProcessed * 100) / numObjects) + "%", LOG_WARNINGS, False) #show some progress, even if low verbosity
-		
-	printOut("\r" + "100" + "%", LOG_WARNINGS)
+	
+	dumpTablesToDisk(dbSettings, pathToOutputDir, pathToPowershell)
+	
+	printOut("\r" + "100" + "%" + getEndline(), LOG_WARNINGS)
+	return
+
+#use external script to dump tables to SQL
+def dumpTablesToDisk(dbSettings, outputFilepath, pathToPowershell):
+	printOut(getEndline() + "Dumping tables to disk ...")
+
+	scriptToRun = "dumpTableSql.ps1"
+	outputFilepath = outputFilepath + "\\" + dictDbObjectTypeToSubDir["TABLE_CREATE"]
+	
+	scriptToRun = os.path.abspath(scriptToRun)
+	outputFilepath = os.path.abspath(outputFilepath)
+	
+	args = "-File " + scriptToRun + " " + dbSettings.sqlServerInstance + " " + dbSettings.sqlDbName + " " + sqlUser + " " + sqlPassword + " " + outputFilepath
+	
+	pathToPowershellDir = win32api.GetShortPathName(os.path.dirname(pathToPowershell))
+
+	runExe(pathToPowershell, pathToPowershellDir, args)
+
 	return
 
 def getErrorSummary(errors):
@@ -280,24 +295,93 @@ def getErrorSummary(errors):
 		summary = summary + "failed to dump object " + str(dbObject.schema) + "." + str(dbObject.sqlObjectName) + getEndline()
 	return summary
 
-def showResults(dbObjects, pathToOutputDir, errors):
+def logErrors(errors, errorLogFilepath):
+	if(len(errors) > 0):
+		if(len(errorLogFilepath) == 0):
+			errorLogFilepath = "sqlDump.errors.log"
+		errorFile = open(errorLogFilepath, 'w+') #overwrite existing file
+		for (dbObject, ex) in errors:
+			errorFile.write(">> Could not dump object " + dbObject.GetFullname() + " - error: " + ex)
+		printOut("Please see the file "+errorLogFilepath+" for more details")
+
+def showResults(dbObjects, pathToOutputDir, errors, errorLogFilepath):
+	printOut(getErrorSummary(errors))
+	printOut(getEndline())
 	printOut(str(len(dbObjects) )+ " objects were dumped to disk at " + pathToOutputDir)
 	printOut(str(len(errors)) + " errors occurred")
-	printOut(getEndline())
-	printOut(getErrorSummary(errors))
+	logErrors(errors, errorLogFilepath)
+
+###############################################################
+#main() - main program entry point
+#args = <SQL Server> <Database name> <SQL user> <path to output directory> <path to sqlcmd.exe directory>
+def main(argv):
+	
+	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, pathToOutputDir, sqlCmdDirPath, pathToPowershell
+	global bIsDbNameAcsvFile, dbDetailsList
+
+	try:
+		opts, args = getopt.getopt(argv, "cdhw", ["csv", "debug", "help", "warnings"])
+	except getopt.GetoptError:
+		usage()
+		sys.exit(2)
+	if(len(args) !=6):
+		usage()
+		sys.exit(3)
+	#assign the args to variables:
+	sqlServerInstance = args[0]
+	sqlDbName = args[1]
+	sqlUser = args[2]
+	pathToOutputDir = args[3]
+	sqlCmdDirPath = args[4]
+	pathToPowershell = args[5]
+	
+	#convert sqlCmdDirPath to short file names:
+	#printOut("looking for sqlcmd.exe at " + sqlCmdDirPath + "\n")
+	sqlCmdDirPath = win32api.GetShortPathName(sqlCmdDirPath)
+	
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			usage()
+			sys.exit()
+		elif opt in ("-c", "--csv"):
+			bIsDbNameAcsvFile = True
+		elif opt in ("-d", "--debug"):
+			#debug mode:
+			setLogVerbosity(LOG_VERBOSE)
+		elif opt in ("-w", "--warnings"):
+			setLogVerbosity(LOG_WARNINGS)
+
+	if(bIsDbNameAcsvFile):
+		dbDetailsList = readDbNamesFile(sqlDbName)
+		(firstDbName, dbOutDir) = dbDetailsList[0]
+		sqlDbName = firstDbName #use the first database, to get the password from user
+	else:
+		dbDetailsList.append( (sqlDbName, pathToOutputDir) )
+	prompt = "Please enter the password for server: " + sqlServerInstance + " database: " + sqlDbName + " user: " + sqlUser + " "
+	sqlPassword = getpass.getpass(prompt)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
 
 ###############################################################
 #MAIN
 
-dbSettings = DatabaseConnectiongSettings(sqlServerInstance, sqlDbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
+for (dbName, dbOutDir) in dbDetailsList:
 
-dbConn = createConnection(dbSettings)
+	printOut(" ____________________________________________")
+	printOut("Processing database " + dbName + "..." )
 
-dbObjects = findExistingDatabaseObjects(dbConn)
+	errorLogFilepath = "sqlDump." + dbName + ".errors.log"
 
-errors = [] #(dbObject, ex)
-dumpObjectsToDisk(dbSettings, dbObjects, pathToOutputDir, errors)
+	dbSettings = DatabaseConnectiongSettings(sqlServerInstance, dbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
 
-showResults(dbObjects, pathToOutputDir, errors)
+	dbConn = createConnection(dbSettings)
+
+	dbObjects = findExistingDatabaseObjects(dbConn)
+
+	errors = [] #(dbObject, ex)
+	dumpObjectsToDisk(dbSettings, dbObjects, dbOutDir, errors, pathToPowershell)
+
+	showResults(dbObjects, dbOutDir, errors, errorLogFilepath)
 
 ###############################################################

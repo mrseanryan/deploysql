@@ -6,11 +6,17 @@ SET DEBUG_ON=-d
 REM comment this out, to turn on debugging:
 SET DEBUG_ON=
 
-SET OUTDIR=%TEMP%\dumpSql
-
-if not exist %OUTDIR% (mkdir %OUTDIR%)
+SET OUTDIR=..\..\..\..\hg_LING_main\LINGandLicensing\LING\sql\database_scripts
 
 SET PATH_TO_PS=C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe
+
+echo _________________________________________
+echo .
+echo Dumping Licensing database to disk ...
+echo .
+
+if not exist %OUTDIR% (dir_not_found)
+IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
 
@@ -19,15 +25,14 @@ IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t
 
+GOTO DONE
+
 echo _________________________________________
 echo .
 echo Results:
 echo .
-REM tree /f %OUTDIR%
+tree /f %OUTDIR%
 
-
-echo .
-echo _________________________________________
 
 GOTO DONE
 
@@ -37,3 +42,5 @@ error_occurred!
 REM type %PATH_TO_DUMP_OUT%
 
 :DONE
+echo .
+echo _________________________________________

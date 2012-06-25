@@ -67,6 +67,7 @@ temp.*
 #logs
 hgweb.access.log
 hgweb.error.log
+*.log
 
 #large files
 *.ade
