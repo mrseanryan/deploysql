@@ -28,7 +28,7 @@ from os import pathsep
 from string import split
 
 from deploySQL_common import *
-
+from database_common import *
 
 ###############################################################
 # settings:

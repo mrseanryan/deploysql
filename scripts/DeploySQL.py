@@ -68,8 +68,16 @@ def usage():
     print __doc__
 
 ###############################################################
+#self tests (unit tests!)
+def selfTestDeploySQL():
+	"""run some self-tests - basically unit tests"""
+	selfTestCommon()
+
+###############################################################
 #main() - main program entry point
 #args = <SQL Server>	<SQL user>	<SQL password>	<listfile of SQL scripts>		<output file of original database objects>
+selfTestDeploySQL()
+
 def main(argv):
 	
 	global sqlServerInstance, sqlDbName, sqlUser, sqlPassword, sqlScriptListfilePath, origOutputFilepath, pathToNewSqlDir, newOutputFilepath, sqlCmdDirPath, IsDummyRun
@@ -239,15 +247,17 @@ def validateArgs(sqlScriptListfilePath, origOutputFilepath):
 	if os.path.exists(origOutputFilepath):
 		raise Exception("The output file of original objects, already exists: " + origOutputFilepath)
 
-
 ###############################################################
 #main
+
 validateArgs(sqlScriptListfilePath, origOutputFilepath)
 
 dbSettings = DatabaseConnectiongSettings(sqlServerInstance, sqlDbName, sqlUser, sqlPassword, sqlCmd, sqlCmdDirPath)
 
 dbConn = createConnection(dbSettings)
 dbVersion = getCurrentDatabaseVersion(dbConn)
+
+printOut("Current database version:" + str(dbVersion))
 
 dbObjects = readListfile(sqlScriptListfilePath)
 dbFilteredObjects = filterObjectsByDbVersion(dbVersion, dbObjects)

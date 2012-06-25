@@ -44,19 +44,15 @@ dictDbObjectTypeToSubDir['VIEW_NEW'] = "views\\"
 
 class DatabaseObject:
 	"""holds details about a database object"""
-	def __init__(self, dbVersion, dbObjectType, sqlObjectName, sqlScriptName):
-		self.dbVersion = long(dbVersion)
-		self.dbObjectType = dbObjectType
-		self.sqlObjectName = sqlObjectName
-		self.sqlScriptName = sqlScriptName
-		self.schema = 'dbo'
-
 	def __init__(self, dbVersion, dbObjectType, sqlObjectName, sqlScriptName, schema):
 		self.dbVersion = long(dbVersion)
 		self.dbObjectType = dbObjectType
 		self.sqlObjectName = sqlObjectName
 		self.sqlScriptName = sqlScriptName
 		self.schema = schema
+
+	def GetFullname(self):
+		return self.schema + "." + self.dbObjectType
 
 ###############################################################
 #FUNCTIONS
@@ -94,6 +90,44 @@ def getEndline():
 def getNumWarnings():
 	return numWarnings
 
+def parseSchemaFromObjectName(sqlObjectNameFromFilename): #returns (schema, sqlObjectName)
+	schema = ""
+	sqlObjectName = ""
+	if "." in sqlObjectNameFromFilename:
+		iDotPos = sqlObjectNameFromFilename.find(".")
+		schema = sqlObjectNameFromFilename[0:iDotPos]
+		sqlObjectName = sqlObjectNameFromFilename[iDotPos + 1: ]
+	else:
+		schema = 'dbo' #default
+		sqlObjectName = sqlObjectNameFromFilename
+	return (schema, sqlObjectName)
+
+def parseSqlScriptName(dbObjectType, sqlScriptName): #returns (schema, sqlObjectName)
+	#we need to parse names like this:
+	#dbo.spLicenceDocLoader_IsLicenceTypeSigned.SQL
+	#dbo.spAmateurExam_Licence.StoredProcedure.sql
+	sqlObjectNameFromFilename = ""
+	if (dbObjectType == 'SP'):
+		sqlObjectNameFromFilename = sqlScriptName.lower()
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.sql', '')
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.storedprocedure', '')
+	elif (dbObjectType == 'UDF'):
+		sqlObjectNameFromFilename = sqlScriptName.lower()
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.sql', '')
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.UserDefinedFunction', '')
+	elif (dbObjectType == 'VIEW'):
+		sqlObjectNameFromFilename = sqlScriptName.lower()
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.sql', '')
+		sqlObjectNameFromFilename = sqlObjectNameFromFilename.replace('.view', '')
+	else:
+		if dbObjectType != 'SP_NEW' and dbObjectType != 'UDF_NEW' and dbObjectType != 'VIEW_NEW':
+			addWarning("Cannot determine original object for the SQL script " + sqlScriptName)
+			
+	#remove the schema prefix, if it is present:
+	(schema, sqlObjectName) = parseSchemaFromObjectName(sqlObjectNameFromFilename)
+	
+	return (schema, sqlObjectName)
+
 #printOut()
 #this function prints out, according to user's options for verbosity
 def printOut(txt, verb = LOG_NORMAL, bNewLine = True):
@@ -127,9 +161,9 @@ def readListfile(sqlScriptListfilePath):
 				continue # a comment line
 			dbObjectType = row[1]
 			sqlScriptName = row[2]
-			sqlObjectName = parseSqlScriptName(dbObjectType, sqlScriptName)
+			(schema, sqlObjectName) = parseSqlScriptName(dbObjectType, sqlScriptName)
 			#printOut("dbObjectType = " + dbObjectType + " sqlScriptName = " + sqlScriptName + " sqlObjectName = " + sqlObjectName)
-			dbObjects.append(DatabaseObject(dbVersion,dbObjectType, sqlObjectName, sqlScriptName))
+			dbObjects.append(DatabaseObject(dbVersion,dbObjectType, sqlObjectName, sqlScriptName, schema))
 	return dbObjects
 
 def runExe(targetScriptName, targetScriptDirPath, args):
@@ -150,3 +184,33 @@ def runExe(targetScriptName, targetScriptDirPath, args):
 def setLogVerbosity(verbosity):
 	global logVerbosity
 	logVerbosity = verbosity
+
+###############################################################
+#self tests - SUPPORT
+def checkEquals(testName, expected, actual):
+	if(expected != actual):
+		raise Exception("!!!TEST FAIL - "+testName+" - expected value:" + str(expected) + " actual value:" + str(actual) )
+
+def checkEqualsCaseInsensitive(testName, expected, actual):
+	checkEquals(testName, expected.lower(), actual.lower())
+
+###############################################################
+#self tests (unit tests!)
+
+def selfTestCommon():
+	"""run some self-tests - basically unit tests - for COMMON"""
+	test_parseSqlScriptName()
+
+def test_parseSqlScriptName_runner(dbObjectType, sqlScriptFilename, expectedSchema, expectedSqlObjectName):
+	testName = 'test_parseSqlScriptName_runner'
+	(actualSchema, actualSqlObjectName) = parseSqlScriptName(dbObjectType, sqlScriptFilename) #returns (schema, sqlObjectName)
+	checkEqualsCaseInsensitive(testName, expectedSchema, actualSchema)
+	checkEqualsCaseInsensitive(testName, expectedSqlObjectName, actualSqlObjectName)
+	return
+
+def test_parseSqlScriptName():
+	test_parseSqlScriptName_runner('SP', 'dbo.spAmateurExam_Licence.StoredProcedure.sql', 'dbo', 'spAmateurExam_Licence')
+	test_parseSqlScriptName_runner('SP', 'spLicenceDocumentation_GetPDFfilenameSuffix.StoredProcedure.sql', 'dbo', 'spLicenceDocumentation_GetPDFfilenameSuffix')
+	test_parseSqlScriptName_runner('SP', 'prs.uspPRSLicence_Report.StoredProcedure.sql', 'PRS', 'uspPRSLicence_Report')
+	test_parseSqlScriptName_runner('SP', 'prs.uspPRSLicence_Report.sql', 'PRS', 'uspPRSLicence_Report')
+	return
