@@ -91,6 +91,7 @@ class StoredProcedureFactory(DatabaseObjectFactoryBase):
 	"""factory for creating an in-memory DatabaseObject for Stored Procedure"""
 	def __init__(self):
 		super(StoredProcedureFactory, self).__init__('SP', 'StoredProcedure')
+		#TODO -SP dump seems to cause very long lines to wrap.  not sure if this is behaviour of sp_help OR our clean processing.  example: dbo.spAmateurRadio_Licence.StoredProcedure.sql
 
 class SchemaFactory (DatabaseObjectFactoryBase):
 	"""factory for creating an in-memory DatabaseObject for Schema"""
