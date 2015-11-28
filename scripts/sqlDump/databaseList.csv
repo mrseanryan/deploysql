@@ -1,5 +1,2 @@
 #Database name, Output directory for the dumped SQL scripts.
-licensing_dev,..\..\..\..\hg_LING_main\LINGandLicensing\LING\sql\database_scripts
-eLicensing_WEB,..\..\..\..\hg_eLicensing_DB_and_common\hg_eLicensing_DB\PRS\database\database_scripts
-eLicensing_DEV_DOWN_FromWEB,..\..\..\..\hg_eLicensing_DB_and_common\hg_eLicensing_DB\database\eLicensing_DOWN_FromWEB\database_scripts
-eLicensing_UP_ToWEB,..\..\..\..\hg_eLicensing_DB_and_common\hg_eLicensing_DB\database\eLicensing_UP_ToWEB\database_scripts
+devTest,sql\scratch

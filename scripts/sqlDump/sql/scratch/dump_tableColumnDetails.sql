@@ -1,8 +1,7 @@
 -- Dump table schema / structure info
 declare @tabelObjectId int
 set @tabelObjectId = 
---Object_ID(N'prs.tblPrsLicence')
-Object_ID(N'dbo.tblLicence')
+Object_ID(N'dbo.Country')
 
 select
   'Column_name' = ac.name,

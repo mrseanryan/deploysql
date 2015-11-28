@@ -10,7 +10,7 @@ SET PATH_TO_PS=C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe
 
 time /t
 
-%PATH_TO_PS% -File dumpTableSql.ps1 192.168.0.203\SQL2005DEV eLicensing_UP_ToWEB licensing %PASS% %OUTDIR%
+%PATH_TO_PS% -File dumpTableSql.ps1 192.168.0.203\SQL2005DEV devTest Country %PASS% %OUTDIR%
 IF %ERRORLEVEL% NEQ 0 (GOTO ERROR_LABEL)
 
 time /t

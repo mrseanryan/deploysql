@@ -1,5 +1,5 @@
 declare @table varchar(100)
-set @table = 'tblLicence' -- set table name here
+set @table = 'Country' -- set table name here
 declare @sql table(s varchar(1000), id int identity)
 
 -- create statement

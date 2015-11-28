@@ -53,7 +53,7 @@ $scrp.Options.Indexes = $True
 $scrp.Options.WithDependencies = $False
 #$scrp.Options.AnsiFile = $False
 $scrp.Options.Encoding = new-object "System.Text.ASCIIEncoding"
-#$scrp.Options.FileName = $outDirPath + '\licensing_dev.Tables.SQL'
+#$scrp.Options.FileName = $outDirPath + '\devTest.Tables.SQL'
 
 #$tablearray = @()
 $iItem = 1

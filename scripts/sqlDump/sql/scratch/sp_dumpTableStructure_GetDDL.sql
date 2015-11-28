@@ -4,8 +4,6 @@
 --
 --note: this SP is not very robust - does not really work right now.
 --
---dbo.tblLicence
---prs.tblPRSLicence
 --===========================================================================
 --
 -- USAGE: exec sp_GetDDL whatever1    

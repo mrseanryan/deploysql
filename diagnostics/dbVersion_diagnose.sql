@@ -16,10 +16,3 @@ tblDatabaseVersion
 
 
 --exec dbo.spDatabaseVersion_SetVersion 123
-
-/*
-
-drop table tblLicenceDocumentation_ComRegContact
-drop procedure spLicenceDocumentation_GetComRegContact
-
-*/

@@ -104,8 +104,8 @@ def parseSchemaFromObjectName(sqlObjectNameFromFilename): #returns (schema, sqlO
 
 def parseSqlScriptName(dbObjectType, sqlScriptName): #returns (schema, sqlObjectName)
 	#we need to parse names like this:
-	#dbo.spLicenceDocLoader_IsLicenceTypeSigned.SQL
-	#dbo.spAmateurExam_Licence.StoredProcedure.sql
+	#dbo.spLoader_IsTypeSigned.SQL
+	#dbo.spMyStoredProcedure.StoredProcedure.sql
 	sqlObjectNameFromFilename = ""
 	if (dbObjectType == 'SP'):
 		sqlObjectNameFromFilename = sqlScriptName.lower()
@@ -209,8 +209,8 @@ def test_parseSqlScriptName_runner(dbObjectType, sqlScriptFilename, expectedSche
 	return
 
 def test_parseSqlScriptName():
-	test_parseSqlScriptName_runner('SP', 'dbo.spAmateurExam_Licence.StoredProcedure.sql', 'dbo', 'spAmateurExam_Licence')
-	test_parseSqlScriptName_runner('SP', 'spLicenceDocumentation_GetPDFfilenameSuffix.StoredProcedure.sql', 'dbo', 'spLicenceDocumentation_GetPDFfilenameSuffix')
-	test_parseSqlScriptName_runner('SP', 'prs.uspPRSLicence_Report.StoredProcedure.sql', 'PRS', 'uspPRSLicence_Report')
-	test_parseSqlScriptName_runner('SP', 'prs.uspPRSLicence_Report.sql', 'PRS', 'uspPRSLicence_Report')
+	test_parseSqlScriptName_runner('SP', 'dbo.spMyStoredProcedure.StoredProcedure.sql', 'dbo', 'spMyStoredProcedure')
+	test_parseSqlScriptName_runner('SP', 'spDocumentation_GetPdfFilenameSuffix.StoredProcedure.sql', 'dbo', 'spDocumentation_GetPdfFilenameSuffix')
+	test_parseSqlScriptName_runner('SP', 'prs.uspMy_Report.StoredProcedure.sql', 'PRS', 'uspMy_Report')
+	test_parseSqlScriptName_runner('SP', 'prs.uspMYdb_Report.sql', 'PRS', 'uspMYdb_Report')
 	return

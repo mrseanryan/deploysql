@@ -3,7 +3,7 @@
 SETLOCAL
 
 
-REM using a relative path, which will work on an Odin dev box, AND in production (as build script uses the same relative path)
+REM using a relative path, which will work on a dev box, AND in production (as build script uses the same relative path)
 SET PATH_TO_NEW_SQL_DIR=..\database_scripts\
 
 SET PATH_TO_DUMP_OUT=%PATH_TO_NEW_SQL_DIR%originalSqlObjects.sql
@@ -19,7 +19,7 @@ REM for Windows7 + SQLSERVER2008:
 REM SET PATH_TO_SQLCMD_DIR=c:\Progra~1\MICROS~4\100\Tools\Binn\\
 
 REM Settings for dev database:
-SET SERVER=sryan-win7\SQL2005DEV
+SET SERVER=myServerHostName\SQL2005DEV
 REM SET SERVER=SERVER\SQLSERVER_2005
 SET DBNAME=devTest
 
