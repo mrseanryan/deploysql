@@ -5,4 +5,4 @@ and to dump database objects to disk (so they can be searched or committed to so
 
 please see the Wiki:
 
-[DeploySQL Wiki](https://bitbucket.org/str/deploysql/wiki/Home)
+[DeploySQL Wiki](https://github.com/mrseanryan/deploysql/wiki)
